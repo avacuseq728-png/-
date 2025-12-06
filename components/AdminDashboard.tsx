@@ -35,6 +35,7 @@ const AdminDashboard: React.FC = () => {
   const [isAddingUser, setIsAddingUser] = useState(false);
   const [newUser, setNewUser] = useState({ username: '', clinicName: '' });
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
 
   useEffect(() => {
     setRecords(StorageService.getRecords());
@@ -353,6 +354,19 @@ const AdminDashboard: React.FC = () => {
         alert("用户信息更新成功");
     } catch (e: any) {
         alert(e.message);
+    }
+  };
+
+  // --- Delete User Logic ---
+  const handleConfirmDeleteUser = () => {
+    if (!userToDelete) return;
+    try {
+      StorageService.deleteUser(userToDelete.id);
+      setUsers(StorageService.getUsers());
+      setUserToDelete(null);
+      alert("用户账号已删除");
+    } catch (e: any) {
+      alert("删除失败: " + e.message);
     }
   };
 
@@ -781,203 +795,6 @@ const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* 4. RULES ENGINE VIEW */}
-      {activeTab === 'rules' && (
-        <div className="animate-fade-in space-y-6">
-          <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 text-blue-800 text-sm flex items-start">
-            <ShieldAlert className="w-5 h-5 mr-2 shrink-0" />
-            <p>
-              <strong>DRG 规则引擎控制台:</strong> 您可以在此实时调整校验参数或接入新的病组规则。修改后的规则将立即推送至所有医生端，即刻生效。
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4">
-            {rules.map(rule => (
-               <div key={rule.id} className={`bg-white p-5 rounded-lg shadow-sm border transition-all ${editingRuleId === rule.id ? 'border-blue-500 ring-2 ring-blue-100' : 'border-gray-200 hover:border-blue-300'}`}>
-                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
-                   <div className="flex-1">
-                     <h4 className="text-lg font-bold text-gray-800 flex items-center">
-                       {rule.diseaseName} 
-                       <span className="text-xs font-normal text-gray-500 bg-gray-100 px-2 py-1 rounded ml-3 border border-gray-200 font-mono">{rule.drgCode}</span>
-                     </h4>
-                     
-                     <div className="text-sm text-gray-600 mt-2 space-y-1">
-                       {editingRuleId === rule.id ? (
-                          <div className="flex items-center mt-2 bg-blue-50 p-2 rounded w-fit animate-fade-in">
-                              <label className="mr-2 font-bold text-blue-800">设置新限额:</label>
-                              <span className="text-gray-500 mr-1">¥</span>
-                              <input 
-                                type="number" 
-                                value={editCost} 
-                                onChange={e => setEditCost(parseFloat(e.target.value))}
-                                className="border border-blue-300 rounded px-2 py-1 w-24 focus:outline-none focus:border-blue-500"
-                              />
-                          </div>
-                       ) : (
-                          <p className="flex items-center text-gray-700">
-                             <span className="font-bold mr-2">当前限额:</span> 
-                             <span className="font-mono text-lg bg-gray-100 px-1 rounded">¥{rule.maxCost}</span>
-                          </p>
-                       )}
-                       <p className="text-gray-500 text-xs mt-1">
-                         <strong>包含必填项:</strong> {rule.requiredMetrics.map(m => m.label).join(', ')}
-                       </p>
-                     </div>
-                   </div>
-
-                   <div className="mt-4 md:mt-0 flex space-x-2">
-                     {editingRuleId === rule.id ? (
-                        <>
-                          <button onClick={saveRule} className="flex items-center px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">
-                            <Save className="w-4 h-4 mr-1"/> 保存
-                          </button>
-                          <button onClick={cancelEdit} className="flex items-center px-3 py-1.5 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm">
-                            <X className="w-4 h-4 mr-1"/> 取消
-                          </button>
-                        </>
-                     ) : (
-                        <button onClick={() => startEditRule(rule)} className="flex items-center text-gray-400 hover:text-blue-600 px-3 py-2 rounded hover:bg-blue-50 transition border border-transparent hover:border-blue-100">
-                           <Settings className="w-4 h-4 mr-1" />
-                           调整参数
-                        </button>
-                     )}
-                   </div>
-                 </div>
-               </div>
-            ))}
-            
-            {!isAddingRule ? (
-              <button 
-                onClick={() => setIsAddingRule(true)}
-                className="border-2 border-dashed border-gray-300 rounded-lg p-6 flex flex-col items-center justify-center text-gray-500 hover:text-blue-600 hover:border-blue-400 hover:bg-blue-50 transition"
-              >
-                 <Plus className="w-6 h-6 mb-2" />
-                 <span className="text-sm font-medium">接入新的 DRG 病组规则</span>
-              </button>
-            ) : (
-              <div className="bg-white rounded-lg shadow-lg border border-blue-200 p-6 animate-fade-in ring-4 ring-blue-50">
-                <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-4">
-                   <h3 className="text-lg font-bold text-gray-800 flex items-center">
-                     <Plus className="w-5 h-5 mr-2 text-blue-600" />
-                     添加新规则
-                   </h3>
-                   <button onClick={() => setIsAddingRule(false)} className="text-gray-400 hover:text-gray-600">
-                     <X className="w-5 h-5" />
-                   </button>
-                </div>
-                
-                <div className="space-y-6">
-                   {/* 1. Basic Info */}
-                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">疾病名称</label>
-                        <input 
-                          type="text" 
-                          value={newRule.diseaseName}
-                          onChange={e => setNewRule({...newRule, diseaseName: e.target.value})}
-                          placeholder="例如：社区获得性肺炎"
-                          className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">DRG 编码</label>
-                        <input 
-                          type="text" 
-                          value={newRule.drgCode}
-                          onChange={e => setNewRule({...newRule, drgCode: e.target.value})}
-                          placeholder="例如：ET1.9"
-                          className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">费用限额 (¥)</label>
-                        <input 
-                          type="number" 
-                          value={newRule.maxCost || ''}
-                          onChange={e => setNewRule({...newRule, maxCost: parseFloat(e.target.value)})}
-                          placeholder="0.00"
-                          className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
-                        />
-                      </div>
-                   </div>
-
-                   {/* 2. Metrics Config */}
-                   <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                     <div className="flex justify-between items-center mb-4">
-                        <h4 className="text-sm font-bold text-gray-700">必填临床指标配置</h4>
-                        <button 
-                          onClick={handleAddMetric}
-                          className="text-xs flex items-center bg-white border border-gray-300 px-2 py-1 rounded hover:bg-gray-100"
-                        >
-                          <Plus className="w-3 h-3 mr-1" /> 添加指标
-                        </button>
-                     </div>
-                     
-                     <div className="space-y-2">
-                       {newRule.requiredMetrics?.length === 0 && (
-                          <p className="text-xs text-center text-gray-400 py-2">暂无指标，请添加至少一项</p>
-                       )}
-                       {newRule.requiredMetrics?.map((metric, idx) => (
-                         <div key={idx} className="flex items-center gap-2 bg-white p-2 rounded border border-gray-200 shadow-sm">
-                            <span className="text-xs font-mono text-gray-400 w-6 text-center">{idx + 1}</span>
-                            <input 
-                               type="text" 
-                               placeholder="指标名称 (如: 体温)"
-                               value={metric.label}
-                               onChange={e => handleMetricChange(idx, 'label', e.target.value)}
-                               className="flex-1 p-1.5 text-sm border border-gray-300 rounded focus:outline-blue-500"
-                            />
-                            <input 
-                               type="text" 
-                               placeholder="单位"
-                               value={metric.unit}
-                               onChange={e => handleMetricChange(idx, 'unit', e.target.value)}
-                               className="w-20 p-1.5 text-sm border border-gray-300 rounded focus:outline-blue-500"
-                            />
-                            <input 
-                               type="number" 
-                               placeholder="Min"
-                               value={metric.min || ''}
-                               onChange={e => handleMetricChange(idx, 'min', e.target.value)}
-                               className="w-20 p-1.5 text-sm border border-gray-300 rounded focus:outline-blue-500"
-                            />
-                            <span className="text-gray-400">-</span>
-                            <input 
-                               type="number" 
-                               placeholder="Max"
-                               value={metric.max || ''}
-                               onChange={e => handleMetricChange(idx, 'max', e.target.value)}
-                               className="w-20 p-1.5 text-sm border border-gray-300 rounded focus:outline-blue-500"
-                            />
-                            <button onClick={() => handleRemoveMetric(idx)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded">
-                               <Trash2 className="w-4 h-4" />
-                            </button>
-                         </div>
-                       ))}
-                     </div>
-                   </div>
-
-                   <div className="flex justify-end gap-3 pt-2">
-                      <button 
-                        onClick={() => setIsAddingRule(false)} 
-                        className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded"
-                      >
-                        取消
-                      </button>
-                      <button 
-                        onClick={handleSaveNewRule} 
-                        className="px-6 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded shadow-sm"
-                      >
-                        确认添加规则
-                      </button>
-                   </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* 5. USER MANAGEMENT VIEW */}
       {activeTab === 'users' && (
         <div className="animate-fade-in space-y-6">
@@ -1065,6 +882,9 @@ const AdminDashboard: React.FC = () => {
                             <button onClick={() => setEditingUser(u)} className="text-blue-600 hover:text-blue-800 p-1 hover:bg-blue-50 rounded transition" title="编辑用户">
                               <Pencil className="w-4 h-4" />
                             </button>
+                            <button onClick={() => setUserToDelete(u)} className="text-red-600 hover:text-red-800 p-1 hover:bg-red-50 rounded transition" title="删除用户">
+                                <Trash2 className="w-4 h-4" />
+                            </button>
                           </div>
                        </td>
                      </tr>
@@ -1110,6 +930,38 @@ const AdminDashboard: React.FC = () => {
                    </div>
                 </div>
              )}
+
+             {/* Delete User Confirm Modal */}
+             {userToDelete && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+                   <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden border-2 border-red-100">
+                      <div className="p-6 text-center">
+                         <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <Trash2 className="w-6 h-6 text-red-600" />
+                         </div>
+                         <h3 className="text-lg font-bold text-gray-900 mb-2">确认删除此账号?</h3>
+                         <p className="text-sm text-gray-500 mb-6">
+                            您确定要删除 <strong>{userToDelete.username}</strong> 吗？此操作无法撤销。
+                         </p>
+                         <div className="flex gap-3 justify-center">
+                            <button 
+                               onClick={() => setUserToDelete(null)}
+                               className="px-4 py-2 bg-white border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition"
+                            >
+                               取消
+                            </button>
+                            <button 
+                               onClick={handleConfirmDeleteUser}
+                               className="px-4 py-2 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition shadow-sm"
+                            >
+                               确认删除
+                            </button>
+                         </div>
+                      </div>
+                   </div>
+                </div>
+             )}
+
            </div>
         </div>
       )}

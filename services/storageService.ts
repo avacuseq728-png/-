@@ -182,6 +182,13 @@ export const StorageService = {
     }
   },
 
+  deleteUser: (userId: string) => {
+    let users = StorageService.getUsers();
+    users = users.filter(u => u.id !== userId);
+    const encrypted = encrypt(users);
+    localStorage.setItem(KEYS.ALL_USERS, encrypted);
+  },
+
   getCurrentUser: (): User | null => {
     const stored = localStorage.getItem(KEYS.CURRENT_USER);
     return decrypt<User>(stored);
