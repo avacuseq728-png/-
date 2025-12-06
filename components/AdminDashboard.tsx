@@ -3,7 +3,7 @@ import { DrgRule, PatientRecord, MetricRule, User, Role } from '../types';
 import { StorageService } from '../services/storageService';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import * as XLSX from 'xlsx';
-import { Download, ShieldCheck, ShieldAlert, FileText, Settings, Plus, Save, X, Activity, Trash2, Users, UserPlus, FileBarChart, Zap, Eye } from 'lucide-react';
+import { Download, ShieldCheck, ShieldAlert, FileText, Settings, Plus, Save, X, Activity, Trash2, Users, UserPlus, FileBarChart, Zap, Eye, Pencil } from 'lucide-react';
 
 const AdminDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'stats' | 'reports' | 'history' | 'rules' | 'users'>('stats');
@@ -31,9 +31,10 @@ const AdminDashboard: React.FC = () => {
     isActive: true
   });
 
-  // Add User State
+  // User Management State
   const [isAddingUser, setIsAddingUser] = useState(false);
   const [newUser, setNewUser] = useState({ username: '', clinicName: '' });
+  const [editingUser, setEditingUser] = useState<User | null>(null);
 
   useEffect(() => {
     setRecords(StorageService.getRecords());
@@ -335,6 +336,23 @@ const AdminDashboard: React.FC = () => {
       alert("医生账号添加成功！他们现在可以使用该用户名登录系统。");
     } catch (e: any) {
       alert(e.message || "添加用户失败");
+    }
+  };
+
+  // --- Edit User Logic ---
+  const handleUpdateUser = () => {
+    if (!editingUser) return;
+    if (!editingUser.username || !editingUser.clinicName) {
+        alert("请填写完整的用户名和诊所名称");
+        return;
+    }
+    try {
+        StorageService.updateUser(editingUser);
+        setUsers(StorageService.getUsers());
+        setEditingUser(null);
+        alert("用户信息更新成功");
+    } catch (e: any) {
+        alert(e.message);
     }
   };
 
@@ -1027,7 +1045,7 @@ const AdminDashboard: React.FC = () => {
                      <th className="px-6 py-4">登录用户名</th>
                      <th className="px-6 py-4">角色</th>
                      <th className="px-6 py-4">所属机构</th>
-                     <th className="px-6 py-4 text-center">状态</th>
+                     <th className="px-6 py-4 text-center">操作</th>
                    </tr>
                  </thead>
                  <tbody className="divide-y divide-gray-200">
@@ -1042,13 +1060,56 @@ const AdminDashboard: React.FC = () => {
                        </td>
                        <td className="px-6 py-4 text-gray-600">{u.clinicName}</td>
                        <td className="px-6 py-4 text-center">
-                          <span className="inline-block w-2 h-2 bg-green-500 rounded-full"></span>
+                          <div className="flex items-center justify-center space-x-2">
+                            <span className="inline-block w-2 h-2 bg-green-500 rounded-full mr-2" title="状态正常"></span>
+                            <button onClick={() => setEditingUser(u)} className="text-blue-600 hover:text-blue-800 p-1 hover:bg-blue-50 rounded transition" title="编辑用户">
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                          </div>
                        </td>
                      </tr>
                    ))}
                  </tbody>
                </table>
              </div>
+
+             {/* Edit User Modal */}
+             {editingUser && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+                   <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
+                      <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                         <h3 className="font-bold text-gray-800">编辑用户信息</h3>
+                         <button onClick={() => setEditingUser(null)} className="text-gray-400 hover:text-gray-600">
+                            <X className="w-5 h-5" />
+                         </button>
+                      </div>
+                      <div className="p-6 space-y-4">
+                         <div>
+                            <label className="block text-xs font-semibold text-gray-500 mb-1">登录用户名</label>
+                            <input 
+                              type="text"
+                              value={editingUser.username}
+                              onChange={e => setEditingUser({...editingUser, username: e.target.value})}
+                              className="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-200 focus:outline-none"
+                            />
+                         </div>
+                         <div>
+                            <label className="block text-xs font-semibold text-gray-500 mb-1">所属诊所</label>
+                            <input 
+                              type="text"
+                              value={editingUser.clinicName}
+                              onChange={e => setEditingUser({...editingUser, clinicName: e.target.value})}
+                              className="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-200 focus:outline-none"
+                            />
+                         </div>
+                         <div className="pt-2 flex justify-end gap-3">
+                             <button onClick={() => setEditingUser(null)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded">取消</button>
+                             <button onClick={handleUpdateUser} className="px-4 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded">保存更改</button>
+                         </div>
+                      </div>
+                   </div>
+                </div>
+             )}
            </div>
         </div>
       )}

@@ -1,61 +1,67 @@
-import { GoogleGenAI, Type } from "@google/genai";
 import { DrgRule } from "../types";
 
-const initGenAI = () => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    console.warn("API_KEY not found in environment variables");
-    return null;
-  }
-  return new GoogleGenAI({ apiKey });
-};
-
+/**
+ * 本地模拟智能提取服务 (无 API 版本)
+ * 使用正则表达式匹配文本中的关键词和数值
+ */
 export const extractClinicalData = async (
   note: string, 
   rule: DrgRule
 ): Promise<Record<string, number> | null> => {
-  const ai = initGenAI();
-  if (!ai) return null;
+  
+  // 模拟 AI 思考的延迟，提供更好的交互感
+  await new Promise(resolve => setTimeout(resolve, 800));
 
   try {
-    const metricProperties: Record<string, any> = {};
-    const propertyOrdering: string[] = [];
+    const result: Record<string, number> = {};
+    const normalizedNote = note.replace(/\s+/g, ''); // 去除所有空格以便匹配
 
-    // Dynamically build schema based on selected disease rule
-    rule.requiredMetrics.forEach(m => {
-      metricProperties[m.key] = {
-        type: Type.NUMBER,
-        description: `患者的 ${m.label}，单位为 ${m.unit}。`,
-      };
-      propertyOrdering.push(m.key);
+    // 1. 提取诊疗费用
+    // 匹配规则：寻找 "费用"、"金额"、"花费" 后面跟随的数字
+    const costRegex = /(?:费用|金额|花费|总价|合计)[:：]?(\d+(\.\d+)?)/;
+    const costMatch = normalizedNote.match(costRegex);
+    if (costMatch) {
+      result['cost'] = parseFloat(costMatch[1]);
+    }
+
+    // 2. 提取 DRG 规则中定义的必要指标
+    rule.requiredMetrics.forEach(metric => {
+      // 构建更灵活的正则：
+      // 1. 匹配指标名称 (如 "收缩压")
+      // 2. 可选匹配冒号
+      // 3. 匹配数字
+      // 4. 处理一些常见别名
+      
+      let keywords = [metric.label];
+      
+      // 添加一些常见医学别名映射
+      if (metric.key === 'systolic') keywords.push('高压', '上压');
+      if (metric.key === 'diastolic') keywords.push('低压', '下压');
+      if (metric.key === 'temperature') keywords.push('温度', 'T');
+      if (metric.key === 'weight') keywords.push('体重');
+      if (metric.key === 'fastingGlucose') keywords.push('血糖', '空腹');
+      if (metric.key === 'hba1c') keywords.push('糖化');
+
+      // 构造正则：(关键词1|关键词2)[:：]?(\d+(\.\d+)?)
+      const pattern = `(${keywords.join('|')})[:：]?(\\d+(\\.\\d+)?)`;
+      const regex = new RegExp(pattern);
+      
+      const match = normalizedNote.match(regex);
+      if (match) {
+        // match[2] 是捕获的数字部分
+        result[metric.key] = parseFloat(match[2]);
+      }
     });
 
-    // Add cost if mentioned
-    metricProperties['cost'] = {
-        type: Type.NUMBER,
-        description: "提及的诊疗或药品总费用。"
-    };
-    propertyOrdering.push('cost');
+    // 如果没有任何数据被提取到，返回 null
+    if (Object.keys(result).length === 0) {
+      return null;
+    }
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: `从以下医生填写的中文临床笔记中提取患者 ${rule.diseaseName} 相关的临床指标数据。注意: ${note}`,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: metricProperties,
-          propertyOrdering: propertyOrdering
-        },
-      },
-    });
-
-    const text = response.text;
-    if (!text) return null;
-    return JSON.parse(text);
+    return result;
 
   } catch (error) {
-    console.error("Gemini Extraction Error:", error);
+    console.error("Local Extraction Error:", error);
     return null;
   }
 };

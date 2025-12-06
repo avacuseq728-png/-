@@ -160,6 +160,28 @@ export const StorageService = {
     localStorage.setItem(KEYS.ALL_USERS, encrypted);
   },
 
+  updateUser: (updatedUser: User) => {
+    const users = StorageService.getUsers();
+    const index = users.findIndex(u => u.id === updatedUser.id);
+    if (index === -1) throw new Error("用户不存在");
+    
+    // Check for duplicate usernames (excluding self)
+    if (users.some(u => u.username === updatedUser.username && u.id !== updatedUser.id)) {
+      throw new Error("用户名已存在");
+    }
+    
+    users[index] = updatedUser;
+    const encrypted = encrypt(users);
+    localStorage.setItem(KEYS.ALL_USERS, encrypted);
+
+    // Update current session if editing self
+    const currentUser = StorageService.getCurrentUser();
+    if (currentUser && currentUser.id === updatedUser.id) {
+      const encryptedUser = encrypt(updatedUser);
+      localStorage.setItem(KEYS.CURRENT_USER, encryptedUser);
+    }
+  },
+
   getCurrentUser: (): User | null => {
     const stored = localStorage.getItem(KEYS.CURRENT_USER);
     return decrypt<User>(stored);

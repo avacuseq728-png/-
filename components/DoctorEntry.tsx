@@ -3,7 +3,7 @@ import { DrgRule, PatientRecord, User } from '../types';
 import { StorageService } from '../services/storageService';
 import { DrgService } from '../services/drgService';
 import { extractClinicalData } from '../services/geminiService';
-import { AlertCircle, CheckCircle, Brain, Loader2, AlertTriangle, Info, FileText, ArrowRight, RefreshCw, Phone, User as UserIcon, Calendar, XCircle } from 'lucide-react';
+import { AlertCircle, CheckCircle, Brain, Loader2, AlertTriangle, Info, FileText, ArrowRight, RefreshCw, Phone, User as UserIcon, Calendar, XCircle, Zap } from 'lucide-react';
 
 interface Props {
   user: User;
@@ -110,15 +110,15 @@ const DoctorEntry: React.FC<Props> = ({ user }) => {
           missingFields: missing,
           outOfRangeFields: outOfRange,
           message: isSuccess 
-            ? "AI 已成功提取所有必要指标，且数据均在合理范围内。" 
-            : "AI 提取完成，但发现部分数据缺失或异常，请人工复核。"
+            ? "已成功从文本中提取指标，且数据均在合理范围内。" 
+            : "提取完成，但发现部分数据缺失或异常，请人工复核。"
         });
 
       } else {
-          setErrors(['AI 无法在笔记中识别相关数据，请尝试手动输入。']);
+          setErrors(['无法在文本中识别到相关数值。请确保输入包含指标名称（如“收缩压”）和对应的数字。']);
       }
     } catch (e) {
-      setErrors(['无法连接到 AI 服务。']);
+      setErrors(['本地提取服务出错。']);
     } finally {
       setIsAiLoading(false);
     }
@@ -453,8 +453,8 @@ const DoctorEntry: React.FC<Props> = ({ user }) => {
             <div className="bg-white p-4 rounded-lg border border-blue-200 shadow-sm transition-all focus-within:ring-2 focus-within:ring-blue-200">
               <div className="flex justify-between items-center mb-3">
                 <label className="text-sm font-bold text-blue-800 flex items-center">
-                  <Brain className="w-4 h-4 mr-2" />
-                  AI 智能填报助手
+                  <Zap className="w-4 h-4 mr-2" />
+                  智能文本解析助手 (离线版)
                 </label>
                 <button
                   type="button"
@@ -462,14 +462,14 @@ const DoctorEntry: React.FC<Props> = ({ user }) => {
                   disabled={!clinicalNote || isAiLoading}
                   className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-md hover:bg-indigo-700 disabled:bg-gray-300 disabled:text-gray-500 flex items-center transition shadow-sm"
                 >
-                  {isAiLoading ? <Loader2 className="w-3 h-3 animate-spin mr-1"/> : <Brain className="w-3 h-3 mr-1"/>}
+                  {isAiLoading ? <Loader2 className="w-3 h-3 animate-spin mr-1"/> : <Zap className="w-3 h-3 mr-1"/>}
                   提取数据
                 </button>
               </div>
               <textarea 
                 value={clinicalNote}
                 onChange={e => setClinicalNote(e.target.value)}
-                placeholder="尝试粘贴临床笔记，例如：'患者张三，确诊原发性高血压。今日收缩压130，舒张压85，开具降压药费用120元。' 系统将自动提取数据。"
+                placeholder={`请输入包含数值的文本，系统将自动抓取。例如：\n“患者今日${selectedRule.requiredMetrics[0]?.label || '指标'} 120，费用 150元”`}
                 className="w-full text-sm p-3 border border-gray-200 rounded-md h-24 focus:ring-0 focus:outline-none resize-none placeholder-gray-400"
               />
             
