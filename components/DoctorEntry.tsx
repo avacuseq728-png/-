@@ -2,18 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { DrgRule, PatientRecord, User } from '../types';
 import { StorageService } from '../services/storageService';
 import { DrgService } from '../services/drgService';
-import { extractClinicalData } from '../services/geminiService';
-import { AlertCircle, CheckCircle, Brain, Loader2, AlertTriangle, Info, FileText, ArrowRight, RefreshCw, Phone, User as UserIcon, Calendar, XCircle, Zap } from 'lucide-react';
+import { AlertCircle, CheckCircle, AlertTriangle, Info, ArrowRight, RefreshCw, Phone, User as UserIcon, Plus, Trash2 } from 'lucide-react';
 
 interface Props {
   user: User;
 }
 
-interface AiFeedback {
-  success: boolean;
-  missingFields: string[];
-  outOfRangeFields: string[];
-  message: string;
+interface CustomMetric {
+  id: string;
+  label: string;
+  value: string;
 }
 
 const DoctorEntry: React.FC<Props> = ({ user }) => {
@@ -26,20 +24,18 @@ const DoctorEntry: React.FC<Props> = ({ user }) => {
   const [patientId, setPatientId] = useState('');
   const [patientAge, setPatientAge] = useState<number | ''>('');
   const [patientGender, setPatientGender] = useState('男');
-  const [patientEthnicity, setPatientEthnicity] = useState(''); // New State
+  const [patientEthnicity, setPatientEthnicity] = useState('');
   const [patientPhone, setPatientPhone] = useState('');
-  const [allergyHistory, setAllergyHistory] = useState(''); // New State
-  const [pastMedicalHistory, setPastMedicalHistory] = useState(''); // New State
+  const [allergyHistory, setAllergyHistory] = useState('');
+  const [pastMedicalHistory, setPastMedicalHistory] = useState('');
 
   const [cost, setCost] = useState<number | ''>('');
   const [metrics, setMetrics] = useState<Record<string, number | string>>({});
-  const [clinicalNote, setClinicalNote] = useState('');
-  
+  const [customMetrics, setCustomMetrics] = useState<CustomMetric[]>([]);
+
   // UI State
-  const [isAiLoading, setIsAiLoading] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [submittedRecord, setSubmittedRecord] = useState<PatientRecord | null>(null);
-  const [aiFeedback, setAiFeedback] = useState<AiFeedback | null>(null);
 
   useEffect(() => {
     setRules(StorageService.getRules());
@@ -53,81 +49,35 @@ const DoctorEntry: React.FC<Props> = ({ user }) => {
       const initialMetrics: Record<string, ''> = {};
       selectedRule.requiredMetrics.forEach(m => initialMetrics[m.key] = '');
       setMetrics(initialMetrics);
+      setCustomMetrics([]); // Reset custom metrics
       setErrors([]);
       setSubmittedRecord(null);
-      setAiFeedback(null);
     }
   }, [selectedRule]);
 
-  const handleAiExtract = async () => {
-    if (!selectedRule || !clinicalNote) return;
-    setIsAiLoading(true);
-    setErrors([]);
-    setAiFeedback(null);
-    
-    try {
-      const extracted = await extractClinicalData(clinicalNote, selectedRule);
-      if (extracted) {
-        // Update form values
-        setMetrics(prev => {
-          const next = { ...prev };
-          Object.keys(extracted).forEach(key => {
-            if (key !== 'cost' && extracted[key] !== null) {
-              next[key] = extracted[key];
-            }
-          });
-          return next;
-        });
-        
-        if (extracted.cost) {
-            setCost(extracted.cost);
-        }
+  // --- Custom Metrics Logic ---
+  const addCustomMetric = () => {
+    setCustomMetrics([
+      ...customMetrics,
+      { id: crypto.randomUUID(), label: '', value: '' }
+    ]);
+  };
 
-        // Analyze and generate detailed feedback
-        const missing: string[] = [];
-        const outOfRange: string[] = [];
-        
-        selectedRule.requiredMetrics.forEach(m => {
-          const val = extracted[m.key];
-          if (val === undefined || val === null) {
-            missing.push(m.label);
-          } else {
-            if (val < m.min || val > m.max) {
-              outOfRange.push(`${m.label} (${val})`);
-            }
-          }
-        });
+  const removeCustomMetric = (id: string) => {
+    setCustomMetrics(customMetrics.filter(m => m.id !== id));
+  };
 
-        // Determine cost status for feedback
-        if (extracted.cost && extracted.cost > selectedRule.maxCost) {
-            outOfRange.push(`诊疗费用 (${extracted.cost})`);
-        }
-
-        const isSuccess = missing.length === 0 && outOfRange.length === 0;
-
-        setAiFeedback({
-          success: isSuccess,
-          missingFields: missing,
-          outOfRangeFields: outOfRange,
-          message: isSuccess 
-            ? "已成功从文本中提取指标，且数据均在合理范围内。" 
-            : "提取完成，但发现部分数据缺失或异常，请人工复核。"
-        });
-
-      } else {
-          setErrors(['无法在文本中识别到相关数值。请确保输入包含指标名称（如“收缩压”）和对应的数字。']);
-      }
-    } catch (e) {
-      setErrors(['本地提取服务出错。']);
-    } finally {
-      setIsAiLoading(false);
-    }
+  const updateCustomMetric = (id: string, field: 'label' | 'value', val: string) => {
+    setCustomMetrics(customMetrics.map(m => 
+      m.id === id ? { ...m, [field]: val } : m
+    ));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedRule) return;
 
+    // 1. Process Required Metrics
     const numMetrics: Record<string, number> = {};
     let validConversion = true;
     
@@ -137,11 +87,23 @@ const DoctorEntry: React.FC<Props> = ({ user }) => {
       numMetrics[key] = val;
     });
 
+    // 2. Process Custom Metrics
+    customMetrics.forEach(cm => {
+      if (cm.label.trim() && cm.value !== '') {
+        const val = parseFloat(cm.value);
+        if (!isNaN(val)) {
+           numMetrics[cm.label.trim()] = val; 
+        } else {
+           validConversion = false;
+        }
+      }
+    });
+
     const numCost = parseFloat(cost as string);
     const numAge = typeof patientAge === 'string' ? parseInt(patientAge) : patientAge;
 
     if (!validConversion || isNaN(numCost) || isNaN(numAge) || !numAge) {
-      setErrors(['请正确填写所有数值字段（含年龄、费用）。']);
+      setErrors(['请正确填写所有数值字段（含年龄、费用及自定义指标）。']);
       return;
     }
 
@@ -181,7 +143,6 @@ const DoctorEntry: React.FC<Props> = ({ user }) => {
     StorageService.addRecord(newRecord);
     setSubmittedRecord(newRecord); // Switch to Success View
     setErrors([]);
-    setAiFeedback(null);
   };
 
   const handleReset = () => {
@@ -196,8 +157,7 @@ const DoctorEntry: React.FC<Props> = ({ user }) => {
     setAllergyHistory('');
     setPastMedicalHistory('');
     setCost('');
-    setClinicalNote('');
-    setAiFeedback(null);
+    setCustomMetrics([]);
     if (selectedRule) {
       const initialMetrics: Record<string, ''> = {};
       selectedRule.requiredMetrics.forEach(m => initialMetrics[m.key] = '');
@@ -449,55 +409,8 @@ const DoctorEntry: React.FC<Props> = ({ user }) => {
         {selectedRule && (
           <div className="bg-blue-50/50 p-6 rounded-xl border border-blue-100 animate-fade-in space-y-6">
             
-            {/* AI Assistant Section */}
-            <div className="bg-white p-4 rounded-lg border border-blue-200 shadow-sm transition-all focus-within:ring-2 focus-within:ring-blue-200">
-              <div className="flex justify-between items-center mb-3">
-                <label className="text-sm font-bold text-blue-800 flex items-center">
-                  <Zap className="w-4 h-4 mr-2" />
-                  智能文本解析助手 (离线版)
-                </label>
-                <button
-                  type="button"
-                  onClick={handleAiExtract}
-                  disabled={!clinicalNote || isAiLoading}
-                  className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-md hover:bg-indigo-700 disabled:bg-gray-300 disabled:text-gray-500 flex items-center transition shadow-sm"
-                >
-                  {isAiLoading ? <Loader2 className="w-3 h-3 animate-spin mr-1"/> : <Zap className="w-3 h-3 mr-1"/>}
-                  提取数据
-                </button>
-              </div>
-              <textarea 
-                value={clinicalNote}
-                onChange={e => setClinicalNote(e.target.value)}
-                placeholder={`请输入包含数值的文本，系统将自动抓取。例如：\n“患者今日${selectedRule.requiredMetrics[0]?.label || '指标'} 120，费用 150元”`}
-                className="w-full text-sm p-3 border border-gray-200 rounded-md h-24 focus:ring-0 focus:outline-none resize-none placeholder-gray-400"
-              />
-            
-              {/* AI Feedback Panel */}
-              {aiFeedback && (
-                <div className={`mt-3 p-3 rounded-lg border text-sm animate-fade-in ${aiFeedback.success ? 'bg-green-50 border-green-200 text-green-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
-                   <div className="flex items-start">
-                     {aiFeedback.success ? <CheckCircle className="w-4 h-4 mr-2 mt-0.5" /> : <AlertCircle className="w-4 h-4 mr-2 mt-0.5" />}
-                     <div>
-                       <p className="font-bold">{aiFeedback.message}</p>
-                       
-                       {(aiFeedback.missingFields.length > 0 || aiFeedback.outOfRangeFields.length > 0) && (
-                         <div className="mt-2 text-xs space-y-1">
-                            {aiFeedback.missingFields.length > 0 && (
-                               <p className="flex items-center"><span className="font-semibold mr-1">未找到:</span> {aiFeedback.missingFields.join(', ')}</p>
-                            )}
-                            {aiFeedback.outOfRangeFields.length > 0 && (
-                               <p className="flex items-center"><span className="font-semibold mr-1">数值异常:</span> {aiFeedback.outOfRangeFields.join(', ')}</p>
-                            )}
-                         </div>
-                       )}
-                     </div>
-                   </div>
-                </div>
-              )}
-            </div>
-
-            <div className="border-t border-blue-200 pt-4">
+            {/* Required Metrics Section */}
+            <div>
               <h3 className="text-sm font-bold text-gray-800 mb-4 flex items-center">
                 <Info className="w-4 h-4 mr-2 text-blue-500"/>
                 DRG 必填指标 (由 {selectedRule.drgCode} 规则定义)
@@ -542,7 +455,59 @@ const DoctorEntry: React.FC<Props> = ({ user }) => {
                     </div>
                   );
                 })}
-                
+              </div>
+              
+              {/* Custom Metrics Section */}
+              <div className="mt-6 border-t border-blue-200 pt-4">
+                 <div className="flex justify-between items-center mb-3">
+                    <h3 className="text-sm font-bold text-gray-800 flex items-center">
+                      <Plus className="w-4 h-4 mr-2 text-indigo-500"/>
+                      补充/自定义临床指标 (选填)
+                    </h3>
+                    <button 
+                       type="button" 
+                       onClick={addCustomMetric}
+                       className="text-xs flex items-center text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg font-medium transition"
+                    >
+                       <Plus className="w-3 h-3 mr-1" /> 添加指标
+                    </button>
+                 </div>
+                 
+                 <div className="space-y-3">
+                    {customMetrics.length === 0 && (
+                       <p className="text-xs text-gray-400 italic">暂无自定义指标，如需补充体重、BMI等数据请点击右上角添加。</p>
+                    )}
+                    {customMetrics.map((cm) => (
+                       <div key={cm.id} className="flex gap-2 items-center animate-fade-in">
+                          <input 
+                             type="text" 
+                             placeholder="指标名称 (如: BMI)"
+                             value={cm.label}
+                             onChange={e => updateCustomMetric(cm.id, 'label', e.target.value)}
+                             className="flex-1 p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-indigo-200 focus:outline-none"
+                          />
+                          <input 
+                             type="number" 
+                             step="0.01"
+                             placeholder="数值"
+                             value={cm.value}
+                             onChange={e => updateCustomMetric(cm.id, 'value', e.target.value)}
+                             className="w-1/3 p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-indigo-200 focus:outline-none"
+                          />
+                          <button 
+                             type="button"
+                             onClick={() => removeCustomMetric(cm.id)}
+                             className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition"
+                             title="移除此指标"
+                          >
+                             <Trash2 className="w-4 h-4" />
+                          </button>
+                       </div>
+                    ))}
+                 </div>
+              </div>
+
+              <div className="mt-6">
                 {/* Cost Field with Progress Bar */}
                 <div className="relative sm:col-span-2 bg-white p-5 rounded-lg border border-gray-200 shadow-sm mt-2">
                   <label className="block text-sm font-bold text-gray-700 mb-3 flex justify-between items-center">
