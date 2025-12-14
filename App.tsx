@@ -118,7 +118,7 @@ const App: React.FC = () => {
       {/* Footer */}
       <footer className="bg-white border-t border-gray-200 mt-auto">
         <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8 flex flex-col sm:flex-row justify-between items-center text-xs text-gray-400">
-           <span>&copy; 2024 DRG 智能校验系统 (演示版)</span>
+           <span>&copy; 2025 DRG 智能校验系统 (演示版)</span>
            <span className="flex items-center mt-2 sm:mt-0"><Lock className="w-3 h-3 mr-1"/> 医保级数据加密传输协议已启用</span>
         </div>
       </footer>
